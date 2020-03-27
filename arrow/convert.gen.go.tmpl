@@ -1,0 +1,100 @@
+package arrow
+
+import (
+	"reflect"
+)
+
+func sliceFromArrowColumn(column array.Interface) (interface{}, error) {
+	numRows := column.Len()
+	var ret interface{}
+	switch column.(type) {
+	{{ range . }}
+		{{ if eq .Name "Timestamp" }}
+			case *array.{{ .Name }}:
+				arr := make([]{{ .Type }}, numRows)
+				vals := column.(*array.{{ .Name }})
+					loc := time.UTC
+					t := vals.DataType().(*arrow.TimestampType)
+					if tz := t.TimeZone; tz != "" {
+						var err error
+						loc, err = time.LoadLocation(tz)
+						if err != nil {
+							return nil, fmt.Errorf("reading location: %v", err)
+						}
+					}
+					for i := range arr {
+						arr[i] = time.Unix(0, int64(vals.Value(i))).In(loc)
+					}
+					ret = arr
+		{{ else if not .ExcludeFrom }}
+				case *array.{{ .Name }}:
+				arr := make([]{{ .Type }}, numRows)
+				vals := column.(*array.{{ .Name }})
+				for i := range arr {
+					{{ if .ConvertFrom }} arr[i] = {{ .Type }}(vals.Value(i))
+					{{ else }} arr[i] = vals.Value(i) {{ end }}
+				}
+				ret = arr
+		{{ end }}
+	{{ end }}
+	default:
+		return nil, fmt.Errorf("unsupported type: %v", reflect.TypeOf(column))
+	}
+	return ret, nil
+}
+
+
+func sliceToArrowInterface(slice interface{}, notNulls []bool) (array.Interface, arrow.DataType) {
+	pool := memory.NewGoAllocator()
+	switch slice.(type) {
+	{{ range . }} {{ if not .ConvertFrom }}
+		case []{{ .Type }}:
+			{{if eq .Name "Timestamp"}} vals := slice.([]time.Time)
+			b := array.NewTimestampBuilder(pool, &arrow.TimestampType{
+				Unit:     arrow.Nanosecond,
+				TimeZone: vals[0].Location().String(),
+			})
+			defer b.Release()
+			ret := make([]arrow.Timestamp, len(vals))
+			for i := range vals {
+				ret[i] = arrow.Timestamp(vals[i].UnixNano())
+			}
+			b.AppendValues(ret, notNulls)
+
+			{{else if eq .Type "int"}} vals := slice.([]int)
+			ret := make([]int64, len(vals))
+			for i := range vals {
+				ret[i] = int64(vals[i])
+			}
+			b := array.New{{ .Name }}Builder(pool)
+			defer b.Release()
+			b.AppendValues(ret, notNulls)
+
+			{{else if eq .Type "uint"}} vals := slice.([]uint)
+			ret := make([]uint64, len(vals))
+			for i := range vals {
+				ret[i] = uint64(vals[i])
+			}
+			b := array.New{{ .Name }}Builder(pool)
+			defer b.Release()
+			b.AppendValues(ret, notNulls)
+
+			{{ else }} b := array.New{{ .Name }}Builder(pool)
+			defer b.Release()
+			b.AppendValues(slice.([]{{ .Type }}), notNulls)
+			{{ end }}
+			return b.New{{ .Name }}Array(), &arrow.{{ .Name }}Type{} 
+	{{ end }} {{ end }}
+	default:
+		b := array.NewStringBuilder(pool)
+		defer b.Release()
+		v := reflect.ValueOf(slice)
+		ret := make([]string, v.Len())
+		for i := range ret {
+			ret[i] = fmt.Sprint(v.Index(i).Interface())
+		}
+		b.AppendValues(ret, notNulls)
+
+		return b.NewStringArray(), &arrow.StringType{}
+	}
+}
