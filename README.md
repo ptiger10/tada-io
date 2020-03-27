@@ -1,11 +1,12 @@
 # tada-io
 
-Reading/writing tada DataFrames from other sources or languages.
+Reading/writing tada DataFrames from other sources.
 
 ## Pandas DataFrames (via Apache Arrow)
 
 `main.py`
-Written for pyarrow version 0.16 and pandas version 1.0.1
+
+(Using pyarrow version 0.16.0 and pandas version 1.0.1)
 ```
 import pyarrow as pa
 import pandas as pd
