@@ -40,18 +40,20 @@ with open('tableFrom.arrow', 'wb') as sink:
 
 */
 
-func TestFromArrow(t *testing.T) {
+func TestFromReader(t *testing.T) {
 	f, err := os.Open("tableFrom.arrow")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
+
 	fr, err := ipc.NewFileReader(f)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer fr.Close()
-	df, err := FromArrow(fr)
+
+	df, err := FromReader(fr)
 	if err != nil {
 		t.Fatal(err)
 	}

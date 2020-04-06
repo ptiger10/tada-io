@@ -3,33 +3,41 @@ package arrow
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
 	"strings"
 
 	"github.com/apache/arrow/go/arrow"
 	"github.com/apache/arrow/go/arrow/array"
-	"github.com/apache/arrow/go/arrow/ipc"
+	"github.com/apache/arrow/go/arrow/arrio"
 	"github.com/ptiger10/tada"
 )
 
 // -- FROM ARROW
 
-// FromArrow converts an Arrow file to a DataFrame
-func FromArrow(r *ipc.FileReader) (*tada.DataFrame, error) {
-	var ret *tada.DataFrame
-	var schema *arrow.Schema
-	for rec := 0; rec < r.NumRecords(); rec++ {
-		record, err := r.Record(rec)
+// FromReader converts an arrio.Reader to a DataFrame
+func FromReader(r arrio.Reader) (*tada.DataFrame, error) {
+	var (
+		ret    *tada.DataFrame
+		schema *arrow.Schema
+		i      int
+	)
+loop:
+	for {
+		rec, err := r.Read()
 		if err != nil {
-			log.Fatal(err)
+			if err == io.EOF {
+				break loop
+			}
+			return nil, fmt.Errorf("tada/arrow: could not read record %d: %w", i, err)
 		}
-		df, err := dataFrameFromRecordBatch(record)
+		df, err := dataFrameFromRecordBatch(rec)
 		if err != nil {
-			return nil, fmt.Errorf("tada/arrow: record %d: converting Arrow to DataFrame: %v", rec, err)
+			return nil, fmt.Errorf("tada/arrow: record %d: converting Arrow to DataFrame: %w", i, err)
 		}
-		if rec == 0 {
+		i++
+		if ret == nil {
 			ret = df
-			schema = record.Schema()
+			schema = rec.Schema()
 		} else {
 			ret = ret.Append(df)
 		}
