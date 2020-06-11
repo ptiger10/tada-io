@@ -36,12 +36,14 @@ func main() {
         ...
     }
     defer f.Close()
+		
     r, err := ipc.NewFileReader(f)
     if err != nil {
         ...
     }
     defer r.Close()
-    df, err := arrow.FromArrow(r)
+
+    df, err := arrow.FromReader(r)
     if err != nil {
         ...
     }

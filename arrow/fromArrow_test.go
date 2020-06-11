@@ -2,8 +2,8 @@ package arrow
 
 import (
 	"fmt"
-	"log"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/apache/arrow/go/arrow/ipc"
@@ -40,20 +40,39 @@ with open('tableFrom.arrow', 'wb') as sink:
 
 */
 
-func TestFromArrow(t *testing.T) {
+func TestFromReader(t *testing.T) {
 	f, err := os.Open("tableFrom.arrow")
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	defer f.Close()
+
 	fr, err := ipc.NewFileReader(f)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	defer fr.Close()
-	df, err := FromArrow(fr)
+
+	df, err := FromReader(fr)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
-	fmt.Println(df)
+
+	got := new(strings.Builder)
+	fmt.Fprintf(got, "%v", df)
+
+	want := `+-------------------++-----+-----+-------+---------------------------+
+| __index_level_0__ || one | two | three |           four            |
+|-------------------||-----|-----|-------|---------------------------|
+|                 a ||  -1 | foo |  true | 2020-01-01T00:00:00-06:00 |
+|                 b || n/a | n/a | false |                       n/a |
+|                 c || 2.5 | baz |  true |                           |
++-------------------++-----+-----+-------+---------------------------+
+`
+
+	if got, want := got.String(), want; got != want {
+		t.Fatalf("invalid dataframe:\ngot:\n%s\nwant:\n%s\n",
+			got, want,
+		)
+	}
 }
